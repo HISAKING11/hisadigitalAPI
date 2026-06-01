@@ -1,0 +1,49 @@
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Environment files ---
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+server/.env
+server/.env.*
+
+# --- Frontend (Vite / Node) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# --- Backend (Python) ---
+server/__pycache__/
+server/**/*.py[cod]
+server/*.py[cod]
+server/.pytest_cache/
+server/.mypy_cache/
+server/.ruff_cache/
+server/.coverage
+server/coverage.xml
+server/htmlcov/
+server/venv/
+server/.venv/
+server/env/
+server/.envrc
+
+# --- Logs ---
+*.log
+server/*.log
+frontend/*.log
+
+# --- Build artifacts ---
+*.egg-info/
+build/
+dist/
