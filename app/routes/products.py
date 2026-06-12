@@ -105,6 +105,7 @@ def _require_template_category(product: CreateProductRequest):
 def _serialize_public_product(product: dict):
     template = _first_related_item(product.get("templates")) or {}
     author = _first_related_item(product.get("authors")) or {}
+    author_profile_image = author.get("profile_url") or author.get("cover_img_url")
 
     return {
         "id": product.get("id"),
@@ -120,6 +121,8 @@ def _serialize_public_product(product: dict):
         "price": template.get("price"),
         "original_price": template.get("original_price"),
         "author_name": author.get("name"),
+        "author_avatar": author_profile_image,
+        "author_cover_image": author.get("cover_img_url"),
         "author_id": product.get("author_id"),
     }
 
@@ -145,7 +148,7 @@ def list_public_products(
     try:
         result = (
             admin_supabase.table("products")
-            .select("id, author_id, category, status, created_at, updated_at, templates(*), authors(name)")
+            .select("id, author_id, category, status, created_at, updated_at, templates(*), authors(name, profile_url, cover_img_url)")
             .eq("status", "published")
             .order("created_at", desc=True)
             .execute()
