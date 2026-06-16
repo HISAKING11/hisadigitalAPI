@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header, File, UploadFile
 from app.database import supabase, admin_supabase
-from app.models.auth_models import RegisterRequest, LoginRequest
+from app.models.auth_models import RegisterRequest, LoginRequest, RefreshTokenRequest
 from datetime import datetime, timezone
 from typing import Optional
 from pathlib import Path
@@ -50,6 +50,16 @@ def _extract_session(response):
 
     if isinstance(response, dict):
         return response.get("session")
+
+    return None
+
+
+def _extract_session_access_token(session):
+    if isinstance(session, dict):
+        return session.get("access_token") or session.get("token")
+
+    if session is not None:
+        return getattr(session, "access_token", None) or getattr(session, "token", None)
 
     return None
 
@@ -316,6 +326,29 @@ def get_current_profile(authorization: Optional[str] = Header(None)):
     except Exception as e:
         print("GET PROFILE ERROR:", e)
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/refresh")
+def refresh_session(refresh: RefreshTokenRequest):
+    try:
+        response = supabase.auth.refresh_session(refresh.refresh_token)
+        session = _extract_session(response)
+        access_token = _extract_session_access_token(session)
+
+        if not access_token:
+            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+        return {
+            "message": "Session refreshed successfully",
+            "session": session,
+            "user": _extract_response_user(response),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("REFRESH SESSION ERROR:", e)
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
 
 @router.post("/profile/avatar")

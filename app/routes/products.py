@@ -268,14 +268,13 @@ def list_author_products(authorization: Optional[str] = Header(None)):
     Get all products for the authenticated author.
     """
     try:
-        user_id, author_id = _get_authenticated_author(authorization)
+        _, author_id = _get_authenticated_author(authorization)
 
         # Get products for this author
         result = (
-            supabase.table("products")
+            admin_supabase.table("products")
             .select("*, templates(*)")
             .eq("author_id", author_id)
-            .eq("user_id", user_id)
             .order("created_at", desc=True)
             .execute()
         )
@@ -306,15 +305,14 @@ def get_product(product_id: str, authorization: Optional[str] = Header(None)):
     Get a specific product by id. Only authors can view their own products.
     """
     try:
-        user_id, author_id = _get_authenticated_author(authorization)
+        _, author_id = _get_authenticated_author(authorization)
 
         # Get product
         result = (
-            supabase.table("products")
+            admin_supabase.table("products")
             .select("*, templates(*)")
             .eq("id", product_id)
             .eq("author_id", author_id)
-            .eq("user_id", user_id)
             .execute()
         )
 
@@ -351,15 +349,14 @@ def update_product(
     """
     try:
         _require_template_category(product)
-        user_id, author_id = _get_authenticated_author(authorization)
+        _, author_id = _get_authenticated_author(authorization)
 
         # Verify ownership
         check = (
-            supabase.table("products")
+            admin_supabase.table("products")
             .select("id, category")
             .eq("id", product_id)
             .eq("author_id", author_id)
-            .eq("user_id", user_id)
             .execute()
         )
         check_data = _extract_data(check) or []
@@ -372,17 +369,16 @@ def update_product(
 
         # Update parent category and template-specific details.
         product_update = (
-            supabase.table("products")
+            admin_supabase.table("products")
             .update({"category": product.category})
             .eq("id", product_id)
             .eq("author_id", author_id)
-            .eq("user_id", user_id)
             .execute()
         )
         product_data = _extract_data(product_update) or []
 
         template_update = (
-            supabase.table("templates")
+            admin_supabase.table("templates")
             .update(_template_payload(product, product_id, author_id))
             .eq("product_id", product_id)
             .eq("author_id", author_id)
@@ -420,15 +416,14 @@ def delete_product(product_id: str, authorization: Optional[str] = Header(None))
     Delete a product. Only the author who created it can delete.
     """
     try:
-        user_id, author_id = _get_authenticated_author(authorization)
+        _, author_id = _get_authenticated_author(authorization)
 
         # Verify ownership and delete
         product_delete = (
-            supabase.table("products")
+            admin_supabase.table("products")
             .delete()
             .eq("id", product_id)
             .eq("author_id", author_id)
-            .eq("user_id", user_id)
             .execute()
         )
 
