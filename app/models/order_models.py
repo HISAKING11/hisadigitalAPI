@@ -27,3 +27,8 @@ class OrderEmailLog(BaseModel):
     recipient_email: str
     status: str
     error_message: Optional[str] = None
+
+
+class OrderStatusUpdateResponse(BaseModel):
+    message: str
+    order: dict
