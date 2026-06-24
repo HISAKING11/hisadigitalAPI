@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException, Header, File, UploadFile
 from app.database import supabase, admin_supabase
 from app.models.auth_models import RegisterRequest, LoginRequest, RefreshTokenRequest
@@ -107,17 +108,21 @@ def _get_authenticated_user_id(authorization: Optional[str]):
         raise HTTPException(status_code=401, detail="Authorization header required")
 
     token = authorization.replace("Bearer ", "")
-    response = supabase.auth.get_user(token)
-    user = _extract_response_user(response)
-    user_id = getattr(user, "id", None) if user is not None else None
+    try:
+        response = supabase.auth.get_user(token)
+        user = _extract_response_user(response)
+        user_id = getattr(user, "id", None) if user is not None else None
 
-    if isinstance(user, dict):
-        user_id = user.get("id")
+        if isinstance(user, dict):
+            user_id = user.get("id")
 
-    if not user_id:
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        return user_id
+    except Exception as e:
+        print("AUTH GET USER ERROR IN AUTH.PY:", e)
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    return user_id
 
 
 def _get_account_profile(user_id: str):

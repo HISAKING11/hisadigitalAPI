@@ -54,15 +54,19 @@ def _get_authenticated_author(authorization: Optional[str]):
 
     token = authorization.replace("Bearer ", "")
 
-    user_data = supabase.auth.get_user(token)
-    user = user_data.user if hasattr(user_data, "user") else (user_data.get("user") if isinstance(user_data, dict) else None)
+    try:
+        user_data = supabase.auth.get_user(token)
+        user = user_data.user if hasattr(user_data, "user") else (user_data.get("user") if isinstance(user_data, dict) else None)
 
-    if not user:
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        user_id = getattr(user, "id", None) or (user.get("id") if isinstance(user, dict) else None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Could not extract user id from token")
+    except Exception as e:
+        print("AUTH GET USER ERROR IN PRODUCTS.PY:", e)
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user_id = getattr(user, "id", None) or (user.get("id") if isinstance(user, dict) else None)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Could not extract user id from token")
 
     author_check = supabase.table("authors").select("id").eq("user_id", user_id).execute()
     author_data = _extract_data(author_check) or []
