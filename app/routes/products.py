@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Header, File, UploadFile, Query
 from typing import Optional, List
+from uuid import uuid4
+from pathlib import Path
 from app.database import supabase, admin_supabase
 from app.models.products_models import CreateProductRequest, CloudinaryUploadResponse
 from app.services.cloudinary_service import upload_image_to_cloudinary
@@ -94,7 +96,8 @@ def _template_payload(product: CreateProductRequest, product_id: str, author_id:
         "tools": product.tools,
         "price": product.price,
         "original_price": product.original_price,
-        "attributes": [{"key": attr.key, "value": attr.value} for attr in product.attributes]
+        "attributes": [{"key": attr.key, "value": attr.value} for attr in product.attributes],
+        "download_url": product.download_url
     }
 
 
@@ -522,4 +525,55 @@ async def upload_screenshots(
         raise
     except Exception as e:
         print("UPLOAD SCREENSHOTS ERROR:", e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@products_router.post("/upload/file")
+async def upload_product_file(
+    file: UploadFile = File(...),
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Upload a product file (zip) to Supabase storage 'products' bucket and return the URL.
+    The URL will be saved in Supabase when creating/updating a product.
+    """
+    try:
+        user_id, author_id = _get_authenticated_author(authorization)
+        
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="File is empty")
+        
+        suffix = Path(file.filename or "").suffix.lower()
+        if suffix != ".zip":
+            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+            
+        storage_path = f"products/{author_id}/{uuid4().hex}.zip"
+        storage = admin_supabase.storage.from_("products")
+        storage.upload(
+            storage_path,
+            content,
+            file_options={"content-type": "application/zip"}
+        )
+        
+        public_url_response = storage.get_public_url(storage_path)
+        public_url = (
+            public_url_response.get("publicUrl")
+            if isinstance(public_url_response, dict)
+            else public_url_response
+        )
+        
+        if not public_url:
+            raise HTTPException(status_code=500, detail="Failed to generate file URL")
+            
+        return {
+            "message": "Product file uploaded successfully",
+            "url": public_url,
+            "storage_path": storage_path
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("UPLOAD PRODUCT FILE ERROR:", e)
         raise HTTPException(status_code=400, detail=str(e))

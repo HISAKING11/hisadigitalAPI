@@ -17,6 +17,7 @@ class CreateProductRequest(BaseModel):
     price: float
     original_price: Optional[float] = None
     attributes: List[AttributeItem] = Field(default_factory=list)
+    download_url: Optional[str] = None
 
 
 class ProductResponse(BaseModel):
