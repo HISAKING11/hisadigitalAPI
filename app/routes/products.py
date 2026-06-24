@@ -70,7 +70,7 @@ def _get_authenticated_author(authorization: Optional[str]):
         print("AUTH GET USER ERROR IN PRODUCTS.PY:", e)
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    author_check = supabase.table("authors").select("id").eq("user_id", user_id).execute()
+    author_check = admin_supabase.table("authors").select("id").eq("user_id", user_id).execute()
     author_data = _extract_data(author_check) or []
 
     if not author_data:
@@ -222,7 +222,7 @@ def create_product(
         user_id, author_id = _get_authenticated_author(authorization)
 
         # Insert parent product row first, then template-specific details.
-        product_insert = supabase.table("products").insert({
+        product_insert = admin_supabase.table("products").insert({
             "author_id": author_id,
             "user_id": user_id,
             "category": product.category,
@@ -237,14 +237,14 @@ def create_product(
         product_row = product_data[0] if isinstance(product_data, list) else product_data
         product_id = product_row["id"]
 
-        template_insert = supabase.table("templates").insert(
+        template_insert = admin_supabase.table("templates").insert(
             _template_payload(product, product_id, author_id)
         ).execute()
 
         template_data = _extract_data(template_insert)
 
         if not template_data:
-            supabase.table("products").delete().eq("id", product_id).eq("author_id", author_id).execute()
+            admin_supabase.table("products").delete().eq("id", product_id).eq("author_id", author_id).execute()
             raise HTTPException(status_code=500, detail="Failed to create template details")
 
         template_row = template_data[0] if isinstance(template_data, list) else template_data
