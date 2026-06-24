@@ -127,6 +127,7 @@ def _serialize_public_product(product: dict):
         "tools": template.get("tools") or [],
         "price": template.get("price"),
         "original_price": template.get("original_price"),
+        "attributes": template.get("attributes") or [],
         "author_name": author.get("name"),
         "author_avatar": author_profile_image,
         "author_cover_image": author.get("cover_img_url"),
