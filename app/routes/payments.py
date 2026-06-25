@@ -137,17 +137,24 @@ def create_razorpay_order(
     if amount_in_paise <= 0:
         raise HTTPException(status_code=400, detail="Invalid order amount")
 
-    rz_order = client.order.create(
-        {
-            "amount": amount_in_paise,
-            "currency": order.get("currency", "INR"),
-            "receipt": str(body.order_id)[:40],
-            "notes": {
-                "internal_order_id": str(body.order_id),
-                "user_id": str(user_id),
-            },
-        }
-    )
+    try:
+        rz_order = client.order.create(
+            {
+                "amount": amount_in_paise,
+                "currency": order.get("currency", "INR"),
+                "receipt": str(body.order_id)[:40],
+                "notes": {
+                    "internal_order_id": str(body.order_id),
+                    "user_id": str(user_id),
+                },
+            }
+        )
+    except Exception as e:
+        print(f"[PAYMENTS] Razorpay order.create failed: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Payment gateway error: {str(e)}"
+        )
 
     return {
         "razorpay_order_id": rz_order["id"],
