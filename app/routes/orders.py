@@ -51,20 +51,51 @@ def _download_url_from_product(product: dict) -> Optional[str]:
     if not isinstance(template, dict):
         template = {}
 
+    file_path = None
     for key in ("download_url", "file_url", "source_url", "asset_url", "zip_url"):
         if template.get(key):
-            return template.get(key)
+            file_path = template.get(key)
+            break
 
-    for attr in template.get("attributes") or []:
-        if not isinstance(attr, dict):
-            continue
-        key = str(attr.get("key") or "").lower()
-        if key in {"download_url", "download url", "file_url", "file url", "source_url", "source url", "zip_url", "zip url"}:
-            value = attr.get("value")
-            if value:
-                return value
+    if not file_path and template.get("attributes"):
+        for attr in template.get("attributes") or []:
+            if not isinstance(attr, dict):
+                continue
+            key = str(attr.get("key") or "").lower()
+            if key in {"download_url", "download url", "file_url", "file url", "zip_url", "zip url"}:
+                value = attr.get("value")
+                if value:
+                    file_path = value
+                    break
 
-    return None
+    if not file_path:
+        return None
+
+    # Strip full HTTP URL if stored
+    if "/storage/v1/object/" in file_path:
+        parts = file_path.split("/products/", 1)
+        file_path = parts[1] if len(parts) > 1 else None
+
+    # Strip redundant "products/" bucket prefix if present
+    # storage.from_("products") already targets the bucket
+    if file_path and file_path.startswith("products/"):
+        file_path = file_path[len("products/"):]
+
+    if not file_path:
+        return None
+
+    try:
+        print(f"DEBUG file_path passed to signed url: '{file_path}'")
+        signed = admin_supabase.storage.from_("products").create_signed_url(
+            file_path, expires_in=300
+        )
+        print(f"DEBUG signed url response: {signed}")
+        return signed.get("signedURL") or signed.get("signed_url")
+    except Exception as e:
+        print("SIGNED URL ERROR:", e)
+        return None
+    
+    
 
 
 def _serialize_order(order: dict, items: list) -> dict:

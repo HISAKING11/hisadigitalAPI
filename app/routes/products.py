@@ -549,7 +549,7 @@ async def upload_product_file(
         if suffix != ".zip":
             raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
             
-        storage_path = f"products/{author_id}/{uuid4().hex}.zip"
+        storage_path = f"{author_id}/{uuid4().hex}.zip"
         storage = admin_supabase.storage.from_("products")
         storage.upload(
             storage_path,
@@ -557,21 +557,11 @@ async def upload_product_file(
             file_options={"content-type": "application/zip"}
         )
         
-        public_url_response = storage.get_public_url(storage_path)
-        public_url = (
-            public_url_response.get("publicUrl")
-            if isinstance(public_url_response, dict)
-            else public_url_response
-        )
-        
-        if not public_url:
-            raise HTTPException(status_code=500, detail="Failed to generate file URL")
-            
         return {
-            "message": "Product file uploaded successfully",
-            "url": public_url,
-            "storage_path": storage_path
-        }
+    "message": "Product file uploaded successfully",
+    "url": storage_path,   # ✅ just the path, e.g. "products/author-id/abc123.zip"
+    "storage_path": storage_path
+}
     
     except HTTPException:
         raise
