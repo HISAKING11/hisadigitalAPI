@@ -5,6 +5,7 @@ from pathlib import Path
 from app.database import supabase, admin_supabase
 from app.models.products_models import CreateProductRequest, CloudinaryUploadResponse
 from app.services.cloudinary_service import upload_image_to_cloudinary
+from app.services.review_service import get_product_review_stats
 
 
 products_router = APIRouter(
@@ -113,9 +114,12 @@ def _serialize_public_product(product: dict):
     template = _first_related_item(product.get("templates")) or {}
     author = _first_related_item(product.get("authors")) or {}
     author_profile_image = author.get("profile_url") or author.get("cover_img_url")
+    product_id = product.get("id")
+
+    stats = get_product_review_stats(product_id) if product_id else {"avg_rating": 0, "reviews_count": 0}
 
     return {
-        "id": product.get("id"),
+        "id": product_id,
         "category": product.get("category"),
         "status": product.get("status"),
         "created_at": product.get("created_at"),
@@ -132,6 +136,8 @@ def _serialize_public_product(product: dict):
         "author_avatar": author_profile_image,
         "author_cover_image": author.get("cover_img_url"),
         "author_id": product.get("author_id"),
+        "avg_rating": stats["avg_rating"],
+        "reviews_count": stats["reviews_count"],
     }
 
 

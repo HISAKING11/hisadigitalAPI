@@ -17,3 +17,17 @@ class LoginRequest(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+class UpdateProfileRequest(BaseModel):
+    name: str
+    phone: str
+
+
+class UpdateEmailRequest(BaseModel):
+    new_email: str
+
+
+class UpdatePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str

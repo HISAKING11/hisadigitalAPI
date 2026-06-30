@@ -1,7 +1,20 @@
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException, Header, File, UploadFile
 from app.database import supabase, admin_supabase
-from app.models.auth_models import RegisterRequest, LoginRequest, RefreshTokenRequest
+from app.models.auth_models import (
+    RegisterRequest,
+    LoginRequest,
+    RefreshTokenRequest,
+    UpdateProfileRequest,
+    UpdateEmailRequest,
+    UpdatePasswordRequest,
+)
+from app.services.user_service import (
+    update_user_profile,
+    update_auth_email,
+    change_user_password,
+    is_author,
+)
 from datetime import datetime, timezone
 from typing import Optional
 from pathlib import Path
@@ -331,6 +344,96 @@ def get_current_profile(authorization: Optional[str] = Header(None)):
     except Exception as e:
         print("GET PROFILE ERROR:", e)
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/profile")
+def update_current_profile(
+    payload: UpdateProfileRequest,
+    authorization: Optional[str] = Header(None)
+):
+    try:
+        user_id = _get_authenticated_user_id(authorization)
+
+        if is_author(user_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Admin profile changes must be made from the admin panel."
+            )
+
+        updated = update_user_profile(user_id, payload.name, payload.phone)
+        if not updated:
+            raise HTTPException(status_code=500, detail="Failed to update profile")
+
+        return {
+            "message": "Profile updated successfully",
+            "profile": updated,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("UPDATE PROFILE ERROR:", e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/profile/email")
+def update_profile_email(
+    payload: UpdateEmailRequest,
+    authorization: Optional[str] = Header(None)
+):
+    try:
+        user_id = _get_authenticated_user_id(authorization)
+
+        if is_author(user_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Admin email changes must be made from the admin panel."
+            )
+
+        update_auth_email(user_id, payload.new_email)
+
+        return {
+            "message": f"Confirmation email sent to {payload.new_email}. Please check your inbox."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("UPDATE EMAIL ERROR:", e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/profile/password")
+def update_profile_password(
+    payload: UpdatePasswordRequest,
+    authorization: Optional[str] = Header(None)
+):
+    try:
+        user_id = _get_authenticated_user_id(authorization)
+
+        if is_author(user_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Admin password changes must be made from the admin panel."
+            )
+
+        _, _, profile = _get_account_profile(user_id)
+        email = profile.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="No email found for this account")
+
+        change_user_password(user_id, email, payload.current_password, payload.new_password)
+
+        return {"message": "Password updated successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = str(e)
+        if "Invalid login credentials" in error_msg:
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        print("UPDATE PASSWORD ERROR:", e)
+        raise HTTPException(status_code=400, detail=error_msg)
 
 
 @router.post("/refresh")

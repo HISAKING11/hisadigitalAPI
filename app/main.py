@@ -7,6 +7,7 @@ from app.routes.auth import author_router
 from app.routes.orders import orders_router
 from app.routes.products import products_router, public_products_router
 from app.routes.payments import router as payments_router
+from app.routes.reviews import public_reviews_router, auth_reviews_router
 
 app = FastAPI()
 
@@ -77,6 +78,10 @@ app.include_router(orders_router)
 
 # Include the payment routes
 app.include_router(payments_router)
+
+# Include the review routes
+app.include_router(public_reviews_router)
+app.include_router(auth_reviews_router)
 
 
 HTML = """
