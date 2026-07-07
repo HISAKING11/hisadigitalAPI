@@ -253,17 +253,25 @@ def download_product(
 
     product_ids = [item.get("product_id") for item in items if item.get("product_id")]
     if product_ids:
-        products_result = (
+        t_result = (
             admin_supabase.table("products")
             .select("id, templates(*)")
             .in_("id", product_ids)
+            .eq("category", "template")
             .execute()
         )
-        products = _extract_data(products_result) or []
+        m_result = (
+            admin_supabase.table("products")
+            .select("id, mobile_ui(*)")
+            .in_("id", product_ids)
+            .eq("category", "mobile_ui")
+            .execute()
+        )
+        products = (_extract_data(t_result) or []) + (_extract_data(m_result) or [])
         print(f"[PAYMENTS] product_ids from order: {product_ids}")
         print(f"[PAYMENTS] products fetched: {products}")
         for product in products:
-            template = product.get("templates")
+            template = product.get("templates") or product.get("mobile_ui")
             if isinstance(template, list):
                 template = template[0] if template else {}
             if not isinstance(template, dict):

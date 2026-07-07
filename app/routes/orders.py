@@ -45,20 +45,20 @@ def _line_total(item: dict) -> float:
 
 
 def _download_url_from_product(product: dict) -> Optional[str]:
-    template = product.get("templates")
-    if isinstance(template, list):
-        template = template[0] if template else {}
-    if not isinstance(template, dict):
-        template = {}
+    detail = product.get("templates") or product.get("mobile_ui")
+    if isinstance(detail, list):
+        detail = detail[0] if detail else {}
+    if not isinstance(detail, dict):
+        detail = {}
 
     file_path = None
     for key in ("download_url", "file_url", "source_url", "asset_url", "zip_url"):
-        if template.get(key):
-            file_path = template.get(key)
+        if detail.get(key):
+            file_path = detail.get(key)
             break
 
-    if not file_path and template.get("attributes"):
-        for attr in template.get("attributes") or []:
+    if not file_path and detail.get("attributes"):
+        for attr in detail.get("attributes") or []:
             if not isinstance(attr, dict):
                 continue
             key = str(attr.get("key") or "").lower()
@@ -161,13 +161,21 @@ def _get_download_url_for_order(order: dict, items: list) -> Optional[str]:
     if not product_ids:
         return None
 
-    products_result = (
+    t_result = (
         admin_supabase.table("products")
         .select("id, templates(*)")
         .in_("id", product_ids)
+        .eq("category", "template")
         .execute()
     )
-    products = _extract_data(products_result) or []
+    m_result = (
+        admin_supabase.table("products")
+        .select("id, mobile_ui(*)")
+        .in_("id", product_ids)
+        .eq("category", "mobile_ui")
+        .execute()
+    )
+    products = (_extract_data(t_result) or []) + (_extract_data(m_result) or [])
     for product in products:
         url = _download_url_from_product(product)
         if url:

@@ -103,15 +103,25 @@ def _template_payload(product: CreateProductRequest, product_id: str, author_id:
 
 
 def _require_template_category(product: CreateProductRequest):
-    if product.category != "template":
+    allowed_categories = {"template", "mobile_ui"}
+    if product.category not in allowed_categories:
         raise HTTPException(
             status_code=400,
-            detail="Only template products are supported until the category-specific table is added"
+            detail="Only template and mobile_ui products are supported until the category-specific table is added"
         )
 
 
+def _detail_table_name(category: str) -> str:
+    return "mobile_ui" if category == "mobile_ui" else "templates"
+
+
+def _detail_key(category: str) -> str:
+    return "mobile_ui" if category == "mobile_ui" else "templates"
+
+
 def _serialize_public_product(product: dict):
-    template = _first_related_item(product.get("templates")) or {}
+    category = product.get("category", "template")
+    detail = _first_related_item(product.get(_detail_key(category))) or {}
     author = _first_related_item(product.get("authors")) or {}
     author_profile_image = author.get("profile_url") or author.get("cover_img_url")
     product_id = product.get("id")
@@ -120,18 +130,18 @@ def _serialize_public_product(product: dict):
 
     return {
         "id": product_id,
-        "category": product.get("category"),
+        "category": category,
         "status": product.get("status"),
         "created_at": product.get("created_at"),
         "updated_at": product.get("updated_at"),
-        "title": template.get("title"),
-        "description": template.get("description"),
-        "cover_image_url": template.get("cover_image_url"),
-        "screenshots": template.get("screenshots") or [],
-        "tools": template.get("tools") or [],
-        "price": template.get("price"),
-        "original_price": template.get("original_price"),
-        "attributes": template.get("attributes") or [],
+        "title": detail.get("title"),
+        "description": detail.get("description"),
+        "cover_image_url": detail.get("cover_image_url"),
+        "screenshots": detail.get("screenshots") or [],
+        "tools": detail.get("tools") or [],
+        "price": detail.get("price"),
+        "original_price": detail.get("original_price"),
+        "attributes": detail.get("attributes") or [],
         "author_name": author.get("name"),
         "author_avatar": author_profile_image,
         "author_cover_image": author.get("cover_img_url"),
@@ -160,15 +170,28 @@ def list_public_products(
     are returned.
     """
     try:
-        result = (
+        base_select = "id, author_id, category, status, created_at, updated_at, authors(name, profile_url, cover_img_url)"
+
+        t_result = (
             admin_supabase.table("products")
-            .select("id, author_id, category, status, created_at, updated_at, templates(*), authors(name, profile_url, cover_img_url)")
+            .select(f"{base_select}, templates(*)")
             .eq("status", "published")
+            .eq("category", "template")
             .order("created_at", desc=True)
             .execute()
         )
 
-        products = _extract_data(result) or []
+        m_result = (
+            admin_supabase.table("products")
+            .select(f"{base_select}, mobile_ui(*)")
+            .eq("status", "published")
+            .eq("category", "mobile_ui")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        products = (_extract_data(t_result) or []) + (_extract_data(m_result) or [])
+        products.sort(key=lambda p: p.get("created_at", ""), reverse=True)
 
         if category:
             products = [product for product in products if product.get("category") == category]
@@ -178,11 +201,12 @@ def list_public_products(
             filtered_products = []
 
             for product in products:
-                template = _first_related_item(product.get("templates")) or {}
+                cat = product.get("category", "template")
+                detail = _first_related_item(product.get(_detail_key(cat))) or {}
                 haystack = " ".join([
-                    str(template.get("title") or ""),
-                    str(template.get("description") or ""),
-                    str(product.get("category") or ""),
+                    str(detail.get("title") or ""),
+                    str(detail.get("description") or ""),
+                    str(cat),
                 ]).lower()
 
                 if search_text in haystack:
@@ -243,24 +267,25 @@ def create_product(
 
         product_row = product_data[0] if isinstance(product_data, list) else product_data
         product_id = product_row["id"]
+        detail_table = _detail_table_name(product.category)
 
-        template_insert = admin_supabase.table("templates").insert(
+        detail_insert = admin_supabase.table(detail_table).insert(
             _template_payload(product, product_id, author_id)
         ).execute()
 
-        template_data = _extract_data(template_insert)
+        detail_data = _extract_data(detail_insert)
 
-        if not template_data:
+        if not detail_data:
             admin_supabase.table("products").delete().eq("id", product_id).eq("author_id", author_id).execute()
-            raise HTTPException(status_code=500, detail="Failed to create template details")
+            raise HTTPException(status_code=500, detail=f"Failed to create {detail_table} details")
 
-        template_row = template_data[0] if isinstance(template_data, list) else template_data
+        detail_row = detail_data[0] if isinstance(detail_data, list) else detail_data
 
         return {
             "message": "Product created successfully",
             "product": {
                 **product_row,
-                "template": template_row
+                _detail_key(product.category): detail_row
             }
         }
 
@@ -284,16 +309,25 @@ def list_author_products(authorization: Optional[str] = Header(None)):
     try:
         _, author_id = _get_authenticated_author(authorization)
 
-        # Get products for this author
-        result = (
+        t_result = (
             admin_supabase.table("products")
             .select("*, templates(*)")
             .eq("author_id", author_id)
+            .eq("category", "template")
             .order("created_at", desc=True)
             .execute()
         )
 
-        products = _extract_data(result) or []
+        m_result = (
+            admin_supabase.table("products")
+            .select("*, mobile_ui(*)")
+            .eq("author_id", author_id)
+            .eq("category", "mobile_ui")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        products = (_extract_data(t_result) or []) + (_extract_data(m_result) or [])
 
         return {
             "message": "Products retrieved successfully",
@@ -321,23 +355,36 @@ def get_product(product_id: str, authorization: Optional[str] = Header(None)):
     try:
         _, author_id = _get_authenticated_author(authorization)
 
-        # Get product
-        result = (
+        product_result = (
             admin_supabase.table("products")
-            .select("*, templates(*)")
+            .select("*")
             .eq("id", product_id)
             .eq("author_id", author_id)
             .execute()
         )
 
-        products = _extract_data(result) or []
+        products = _extract_data(product_result) or []
 
         if not products:
             raise HTTPException(status_code=404, detail="Product not found or access denied")
 
+        product = products[0]
+        cat = product.get("category", "template")
+        detail_table = _detail_table_name(cat)
+
+        detail_result = (
+            admin_supabase.table(detail_table)
+            .select("*")
+            .eq("product_id", product_id)
+            .execute()
+        )
+
+        detail_data = _extract_data(detail_result) or []
+        product[_detail_key(cat)] = detail_data[0] if detail_data else {}
+
         return {
             "message": "Product retrieved successfully",
-            "product": products[0]
+            "product": product
         }
 
     except HTTPException:
@@ -378,28 +425,34 @@ def update_product(
         if not check_data:
             raise HTTPException(status_code=404, detail="Product not found or access denied")
 
-        if check_data[0]["category"] != "template":
-            raise HTTPException(status_code=400, detail="Only template products can be updated with this endpoint")
+        old_category = check_data[0]["category"]
+        new_category = product.category
 
-        # Update parent category and template-specific details.
+        # Update parent category
         product_update = (
             admin_supabase.table("products")
-            .update({"category": product.category})
+            .update({"category": new_category})
             .eq("id", product_id)
             .eq("author_id", author_id)
             .execute()
         )
         product_data = _extract_data(product_update) or []
 
-        template_update = (
-            admin_supabase.table("templates")
-            .update(_template_payload(product, product_id, author_id))
-            .eq("product_id", product_id)
-            .eq("author_id", author_id)
-            .execute()
-        )
+        old_table = _detail_table_name(old_category)
+        new_table = _detail_table_name(new_category)
 
-        updated_data = _extract_data(template_update) or []
+        # If category changed, delete old detail row and insert into new table
+        if old_table != new_table:
+            admin_supabase.table(old_table).delete().eq("product_id", product_id).execute()
+            detail_insert = admin_supabase.table(new_table).insert(
+                _template_payload(product, product_id, author_id)
+            ).execute()
+        else:
+            detail_insert = admin_supabase.table(new_table).update(
+                _template_payload(product, product_id, author_id)
+            ).eq("product_id", product_id).eq("author_id", author_id).execute()
+
+        updated_data = _extract_data(detail_insert) or []
 
         if not product_data or not updated_data:
             raise HTTPException(status_code=500, detail="Failed to update product")
@@ -408,7 +461,7 @@ def update_product(
             "message": "Product updated successfully",
             "product": {
                 **product_data[0],
-                "template": updated_data[0] if isinstance(updated_data, list) else updated_data
+                _detail_key(new_category): updated_data[0] if isinstance(updated_data, list) else updated_data
             }
         }
 
@@ -432,7 +485,25 @@ def delete_product(product_id: str, authorization: Optional[str] = Header(None))
     try:
         _, author_id = _get_authenticated_author(authorization)
 
-        # Verify ownership and delete
+        # Fetch product to determine detail table
+        check = (
+            admin_supabase.table("products")
+            .select("id, category")
+            .eq("id", product_id)
+            .eq("author_id", author_id)
+            .execute()
+        )
+        check_data = _extract_data(check) or []
+
+        if not check_data:
+            raise HTTPException(status_code=404, detail="Product not found or access denied")
+
+        cat = check_data[0].get("category", "template")
+
+        # Delete from detail table first
+        admin_supabase.table(_detail_table_name(cat)).delete().eq("product_id", product_id).execute()
+
+        # Delete parent product
         product_delete = (
             admin_supabase.table("products")
             .delete()
