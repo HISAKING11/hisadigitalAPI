@@ -8,6 +8,8 @@ from app.models.auth_models import (
     UpdateProfileRequest,
     UpdateEmailRequest,
     UpdatePasswordRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
 )
 from app.services.user_service import (
     update_user_profile,
@@ -523,6 +525,42 @@ async def upload_profile_avatar(
         raise
     except Exception as e:
         print("UPLOAD PROFILE AVATAR ERROR:", e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# -----------------------------------
+# FORGOT PASSWORD
+# -----------------------------------
+
+
+@router.post("/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest):
+    try:
+        supabase.auth.reset_password_for_email(
+            payload.email,
+            {
+                "redirect_to": "https://www.hisadigital.me/reset-password"
+            }
+        )
+        return {"message": "If an account exists, a password reset email has been sent."}
+    except Exception as e:
+        print("FORGOT PASSWORD ERROR:", e)
+        return {"message": "If an account exists, a password reset email has been sent."}
+
+
+# -----------------------------------
+# RESET PASSWORD
+# -----------------------------------
+
+
+@router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest):
+    try:
+        supabase.auth.set_session(payload.access_token, payload.refresh_token)
+        supabase.auth.update_user({"password": payload.new_password})
+        return {"message": "Password has been reset successfully."}
+    except Exception as e:
+        print("RESET PASSWORD ERROR:", e)
         raise HTTPException(status_code=400, detail=str(e))
 
 
