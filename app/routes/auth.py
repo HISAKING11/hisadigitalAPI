@@ -303,6 +303,46 @@ def login_author(author: LoginRequest):
             raise e
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+
+# -----------------------------------
+# AUTHOR PASSWORD RECOVERY
+# -----------------------------------
+
+
+@author_router.post("/forgot-password")
+def forgot_author_password(payload: ForgotPasswordRequest):
+    """Send an author-portal recovery email without exposing account existence."""
+    try:
+        supabase.auth.reset_password_for_email(
+            payload.email,
+            {"redirect_to": "https://www.hisadigital.me/author/reset-password"},
+        )
+    except Exception as e:
+        # Keep this response generic so emails cannot be used to enumerate authors.
+        print("AUTHOR FORGOT PASSWORD ERROR:", e)
+
+    return {"message": "If an author account exists, a password reset email has been sent."}
+
+
+@author_router.post("/reset-password")
+def reset_author_password(payload: ResetPasswordRequest):
+    """Reset a password after verifying that the recovery session belongs to an author."""
+    try:
+        user_response = supabase.auth.get_user(payload.access_token)
+        user_id = _extract_user_id(user_response)
+
+        if not user_id or not _fetch_author_profile(user_id):
+            raise HTTPException(status_code=403, detail="This reset link is not for an author account")
+
+        supabase.auth.set_session(payload.access_token, payload.refresh_token)
+        supabase.auth.update_user({"password": payload.new_password})
+        return {"message": "Author password has been reset successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("AUTHOR RESET PASSWORD ERROR:", e)
+        raise HTTPException(status_code=400, detail="The reset link is invalid or has expired")
+
 # -----------------------------------
 # REGISTER
 # -----------------------------------

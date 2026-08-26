@@ -369,6 +369,15 @@ def place_order(order: PlaceOrderRequest, authorization: Optional[str] = Header(
         if not order.items:
             raise HTTPException(status_code=400, detail="Cart items are required")
 
+        profile_result = admin_supabase.table("users").select("name, email, phone").eq("user_id", user_id).execute()
+        profiles = _extract_data(profile_result) or []
+        user_profile = profiles[0] if profiles else None
+        if not user_profile:
+            raise HTTPException(status_code=400, detail="User profile not found")
+        customer_name = user_profile.get("name", "")
+        customer_email = user_profile.get("email", "")
+        customer_phone = user_profile.get("phone", "")
+
         service_id = os.getenv("EMAILJS_SERVICE_ID")
         order_template_id = os.getenv("EMAILJS_ORDER_TEMPLATE_ID")
         reply_template_id = os.getenv("EMAILJS_REPLY_TEMPLATE_ID")
@@ -381,9 +390,9 @@ def place_order(order: PlaceOrderRequest, authorization: Optional[str] = Header(
 
         order_insert = admin_supabase.table(ORDER_TABLE).insert({
             "user_id": user_id,
-            "customer_name": order.customer_name,
-            "customer_email": order.customer_email,
-            "customer_phone": order.customer_phone,
+            "customer_name": customer_name,
+            "customer_email": customer_email,
+            "customer_phone": customer_phone,
             "subtotal": order.subtotal,
             "discount_percent": order.discount_percent,
             "discount_amount": order.discount_amount,
@@ -422,12 +431,12 @@ def place_order(order: PlaceOrderRequest, authorization: Optional[str] = Header(
 
         order_payload = {
             "order_id": order_id,
-            "customer_name": order.customer_name,
-            "customer_email": order.customer_email,
-            "customer_phone": order.customer_phone,
-            "name": order.customer_name,
-            "email": order.customer_email,
-            "phone": order.customer_phone,
+            "customer_name": customer_name,
+            "customer_email": customer_email,
+            "customer_phone": customer_phone,
+            "name": customer_name,
+            "email": customer_email,
+            "phone": customer_phone,
             "product_id": product_id,
             "product_name": product_name,
             "product_price": f"{order.currency} {order.total:.2f}",
@@ -451,14 +460,14 @@ def place_order(order: PlaceOrderRequest, authorization: Optional[str] = Header(
         try:
             reply_payload = {
                 **order_payload,
-                "to_email": order.customer_email,
+                "to_email": customer_email,
             }
             time.sleep(1.1)
             send_emailjs_template(service_id, reply_template_id, reply_payload, public_key, private_key)
-            _insert_order_email_log(order_id, "reply", reply_template_id, order.customer_email, "sent")
+            _insert_order_email_log(order_id, "reply", reply_template_id, customer_email, "sent")
             email_results.append({"email_type": "reply", "status": "sent"})
         except Exception as exc:
-            _insert_order_email_log(order_id, "reply", reply_template_id, order.customer_email, "failed", str(exc))
+            _insert_order_email_log(order_id, "reply", reply_template_id, customer_email, "failed", str(exc))
             reply_email_status = "failed"
             email_results.append({"email_type": "reply", "status": "failed", "error": str(exc)})
 
