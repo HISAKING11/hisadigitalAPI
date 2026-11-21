@@ -13,7 +13,9 @@ app = FastAPI()
 
 ALLOWED_ORIGINS = [
     "https://www.hisadigital.me",
+    "https://www.rztechno.com",
     "https://hisadigital.me",
+    "https://rztechno.com",
     "https://api.hisadigital.me",
     "http://localhost:5173",
     "http://localhost:3000",

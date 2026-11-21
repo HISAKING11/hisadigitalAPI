@@ -320,6 +320,15 @@ def forgot_author_password(payload: ForgotPasswordRequest):
     except Exception as e:
         # Keep this response generic so emails cannot be used to enumerate authors.
         print("AUTHOR FORGOT PASSWORD ERROR:", e)
+        if "rate limit" in str(e).lower():
+            raise HTTPException(
+                status_code=429,
+                detail="Too many reset emails have been requested. Please wait before trying again.",
+            )
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to send the password reset email. Please try again later.",
+        )
 
     return {"message": "If an author account exists, a password reset email has been sent."}
 
